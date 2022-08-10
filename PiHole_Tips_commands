@@ -1,6 +1,7 @@
 
 Drop all my BL lists. 
 
+This is ver dependent
 sqlite3 /etc/pihole/gravity.db
 SQLite version 3.7.17 2013-05-20 00:56:22
 Enter ".help" for instructions
@@ -20,4 +21,29 @@ https://docs.pi-hole.net/group_management/example/
 Sqlite syntax 
 To exit the util, control D , no need to sync or flush 
 https://www.sqlite.org/cli.html#:~:text=Terminate%20the%20sqlite3%20program%20by,a%20long%2Drunning%20SQL%20statement.
+
+Show me, 
+pihole blacklist -l
+pihole blocklist -l --regex 
+blacklist cleaner 
+pihole -b -nuke 
+# still looking for a -nuke for all the regex 
+pihole blacklist --regex -d '(^|\.)tel$'
+# just the regex 
+pihole blacklist --regex -l |tr -s ' ' |cut -d ' ' -f3
+
+# this works 
+# for x in $(pihole blacklist --regex -l |tr -s ' ' |cut -d ' ' -f3 )
+> do
+> echo "$x"
+> pihole blacklist --regex -d "$x" ;
+> echo "..."
+> done
+# as a line , I did have to run this two times, had a handfull that did not want to leave, no error on 2nd run, eh,
+for x in $(pihole blacklist --regex -l |tr -s ' ' |cut -d ' ' -f3 ); do echo "$x"; pihole blacklist --regex -d "$x" ; echo "..."; done
+# then 
+pihole restartdns reload-lists
+# to check 
+pihole blacklist -l and pihole blacklist -l --regex 
+
 
