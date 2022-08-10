@@ -1,0 +1,99 @@
+#!/bin/bash
+# Who: JB and unnamed Net-Dude
+# When: Who is asking?
+# Why: To update good lists to the PIHOLE
+#      and add TLD blocks
+# How: Collect evil domain lists
+#      then remove the evil TDLs from the lists file
+#      final.lists.txt is published on the web page
+#      wilds is the TLD blocks, copy and sync,
+# What: All is auto, expect the wilds are manual maint
+#       the wilds file are the domains to outright TLD block
+#       end goal , pubish the wilds and the new lists
+# Debug: open the echo's or set -x
+# Updates: added ad-hoc to move the files and run scripts
+#
+#######################################################
+# to see how things are done
+# set -x
+
+# for lang cleanup helps the greps
+# lot more sed this time
+LANG=C
+export LANG
+# the vars
+D_STR=$(date --date '1days ago' "+%Y.%m.%d")
+WILDFILE=wildcard.list.txt
+MYTMP=mytmp.txt
+RAWFILE=raw.download.txt
+SOURCEFILE=collect.list.txt
+PLACEHOLDER=placeholder.txt
+FINAL=final.lists.txt
+
+# Wild file is TLD that we just dont Fing care about ( go read the book )
+# the wild file is loaded to the PI hole like this
+# pihole --wild $(cat /home/automation/wildcard.list.txt)
+# the wilds are BLOCKS at the TLD level
+
+# clean up
+[ -a $RAWFILE ] && rm $RAWFILE
+
+# allow comments in the source file
+for x in $(grep -v '#' $SOURCEFILE)
+do
+        # What doing  ?
+        # echo "Collecting $x"
+        # adding filters to the wget pipe to reduce file size and speed things up sed sed sed
+        wget -q -O - $x | grep -v -e "#" |tr '[:upper:]' '[:lower:]' | sed -e 's/0.0.0.0//g' -e 's/127.0.0.1//g' -e 's/[[:blank:]]//g' -e '/^[[:space:]]*$/d' >> $RAWFILE
+        # echo "URL $x" >> $RAWFILE
+
+done
+# echo "wget is done"
+
+# the wilds needs to be lower case for match ups later, cheep tr and basic clean
+# echo "copy..."
+cp $WILDFILE $D_STR.$WILDFILE
+cp $WILDFILE $MYTMP
+# echo "pipe to lower"
+cat $MYTMP |tr '[:upper:]' '[:lower:]' |sort -u --buffer-size=1G --random-sort > $WILDFILE
+# ls -l $MYTMP $WILDFILE
+
+# filters filters filters lots of clean clean clean
+# the lower has been done before, the grep -v are to take away funky chars , no dns can have a space
+# doing it here to , runs fast so no need to put it on the wget pipe
+# echo "filters"
+grep . $RAWFILE |tr -s ' ' |tr -d ' ' |tr -d '\r' |tr '[:upper:]' '[:lower:]' |grep -v -e "^$" -e "[><]" |grep  -v -e "[^a-z.0-9\_\-]" |sort -u --buffer-size=1G --random-sort > $PLACEHOLDER
+
+# sed, take away the wild cards
+# drop out each line that is found in the wilds file
+# echo "start for sed wilds..."
+for x in $(<$WILDFILE) ; do sed -i "s/.*.$x$//g" $PLACEHOLDER; done
+
+# final clean, sed leaves lines, this sort removes blanks
+# echo "sorting"
+sort -u --buffer-size=1G --random-sort $PLACEHOLDER > $FINAL
+
+# some info if we want to see results
+# echo "done sorting"
+# Peek final.txt vs placeholder to see the reduction
+# echo "Reduction counts..."
+# wc -l $RAWFILE $FINAL
+# cp $FINAL $D_STR.$FINAL
+
+# Now to push and sync wilds to the piholes, the final.lists.txt to the S3 for
+# the web page the pi hole can read from the web page
+# used ad-hoc commands , could be play book too, just not yet
+# apply the wilds to the pihole
+ansible pi-servername -b -m copy -a "src=/home/svcansible/BlockListReduce/go-wild-list.sh dest=/home/svcansible/go-wild-list.sh mode=0744 owner=root"
+ansible pi-servername -b -m copy -a "src=/home/svcansible/BlockListReduce/$WILDFILE dest=/home/svcansible/$WILDFILE"
+ansible pi-servername -b -m shell -a "/home/svcansible/go-wild-list.sh"
+ansible pi-servername -b -m shell -a "pihole updateGravity;pihole -g"
+######### update S3 bucket put the file to the linuxjump then copy it up
+ansible s3upload-servername -m copy -a "src=/home/svcansible/BlockListReduce/final.lists.txt dest=/home/s3upload mode=0644 owner=root"
+ansible supload-servername -b -m shell -a "/usr/local/bin/aws s3 cp --acl "public-read" final.lists.txt s3://yourstuffbucket/"
+
+# REF
+# scp $WILDFILE pihole:/home/automation/$WILDFILE
+# ssh pihole /home/automation/go-wild-list.sh
+# ssh pihole  "pihole updateGravity;pihole -g"
+# Ende #
