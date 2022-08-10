@@ -1,0 +1,23 @@
+
+Drop all my BL lists. 
+
+sqlite3 /etc/pihole/gravity.db
+SQLite version 3.7.17 2013-05-20 00:56:22
+Enter ".help" for instructions
+Enter SQL statements terminated with a ";"
+sqlite> DELETE FROM domainlist_by_group WHERE domainlist_id = 1;
+sqlite>
+sqlite>
+
+pihole restartdns reload-lists
+  [✓] Reloading DNS lists
+
+
+See, lots of handy PI sql things, 
+https://docs.pi-hole.net/database/
+https://docs.pi-hole.net/group_management/example/
+
+Sqlite syntax 
+To exit the util, control D , no need to sync or flush 
+https://www.sqlite.org/cli.html#:~:text=Terminate%20the%20sqlite3%20program%20by,a%20long%2Drunning%20SQL%20statement.
+
